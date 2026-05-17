@@ -4,57 +4,85 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NoteTab</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&family=Fraunces:ital,opsz,wght@1,9..144,400&display=swap">
+
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
-    <!-- Sidebar for notes management -->
-    <div class="sidebar" id="sidebar">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar" aria-label="Notes list">
       <div class="sidebar-header">
         <h2>Notes</h2>
-        <button class="btn-icon" id="newNoteBtn" title="New Note">+</button>
+        <button class="btn-icon" id="newNoteBtn" title="New note" aria-label="New note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
       </div>
       <div class="notes-list" id="notesList"></div>
-    </div>
+    </aside>
 
     <!-- Main editor area -->
-    <div class="main">
-      <button class="toggle-sidebar" id="toggleSidebar" title="Toggle Notes List">☰</button>
+    <main class="main">
+      <button class="toggle-sidebar" id="toggleSidebar" title="Toggle notes list" aria-label="Toggle notes list">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2"/>
+          <line x1="9" y1="4" x2="9" y2="20"/>
+        </svg>
+      </button>
 
       <div class="editor-container">
-        <input
-          type="text"
-          class="note-title"
-          id="noteTitle"
-          placeholder="Note title..."
-          spellcheck="false"
-        >
+        <div class="note-title-wrap">
+          <input
+            type="text"
+            class="note-title"
+            id="noteTitle"
+            placeholder="Untitled"
+            spellcheck="false"
+            aria-label="Note title"
+          >
+        </div>
         <textarea
           class="editor"
           id="editor"
-          placeholder="Start typing..."
+          placeholder="Start writing&hellip;"
           spellcheck="true"
+          aria-label="Note content"
         ></textarea>
       </div>
 
       <!-- Status bar -->
       <div class="status-bar">
         <div class="stats">
-          <span id="charCount">0 characters</span>
-          <span class="separator">•</span>
           <span id="wordCount">0 words</span>
+          <span class="separator">·</span>
+          <span id="charCount">0 characters</span>
         </div>
         <div class="actions">
-          <span class="save-status" id="saveStatus">Saved</span>
-          <button class="btn-icon-action" id="exportBtn" title="Export note">
-            <img src="icons/download-square-solid.svg" alt="Export" class="icon">
+          <span class="save-status saved" id="saveStatus">Saved</span>
+          <button class="btn-icon-action" id="exportBtn" title="Export note (⌘E)" aria-label="Export note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
           </button>
-          <button class="btn-icon-action btn-danger" id="deleteBtn" title="Delete note">
-            <img src="icons/trash-solid.svg" alt="Delete" class="icon">
+          <button class="btn-icon-action" id="deleteBtn" title="Delete note" aria-label="Delete note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 6h18"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            <span class="confirm-label">really?</span>
           </button>
         </div>
       </div>
-    </div>
+    </main>
   </div>
 
   <script src="script.js"></script>

@@ -91,40 +91,55 @@ function updateCurrentNote() {
 }
 
 function switchNote(noteId) {
-  // Save current note before switching
   updateCurrentNote();
+  if (deleteConfirmTimeout) resetDeleteConfirm();
 
   state.currentNoteId = noteId;
   loadCurrentNote();
   saveNotes();
 }
 
-function deleteCurrentNote() {
+let deleteConfirmTimeout = null;
+
+function resetDeleteConfirm() {
+  deleteBtn.classList.remove('confirming');
+  clearTimeout(deleteConfirmTimeout);
+  deleteConfirmTimeout = null;
+}
+
+function performDelete() {
+  resetDeleteConfirm();
+
   if (state.notes.length === 1) {
-    // Don't delete the last note, just clear it
     const currentNote = getCurrentNote();
     currentNote.title = 'Untitled Note';
     currentNote.content = '';
     noteTitle.value = '';
     editor.value = '';
     updateStats();
+    renderNotesList();
     saveNotes();
     return;
   }
 
-  const confirmed = confirm('Are you sure you want to delete this note?');
-  if (!confirmed) return;
-
   const currentIndex = state.notes.findIndex(note => note.id === state.currentNoteId);
   state.notes = state.notes.filter(note => note.id !== state.currentNoteId);
-
-  // Switch to next note or previous if at end
   const newIndex = currentIndex >= state.notes.length ? state.notes.length - 1 : currentIndex;
   state.currentNoteId = state.notes[newIndex].id;
 
   renderNotesList();
   loadCurrentNote();
   saveNotes();
+}
+
+function deleteCurrentNote() {
+  if (deleteBtn.classList.contains('confirming')) {
+    performDelete();
+    return;
+  }
+
+  deleteBtn.classList.add('confirming');
+  deleteConfirmTimeout = setTimeout(resetDeleteConfirm, 3000);
 }
 
 // UI functions
@@ -174,15 +189,16 @@ function updateStats() {
 }
 
 function updateSaveStatus(status) {
+  saveStatus.classList.remove('saving', 'saved', 'error');
   if (status === 'saving') {
-    saveStatus.textContent = 'Saving...';
+    saveStatus.textContent = 'Saving';
     saveStatus.classList.add('saving');
   } else if (status === 'saved') {
     saveStatus.textContent = 'Saved';
-    saveStatus.classList.remove('saving');
+    saveStatus.classList.add('saved');
   } else if (status === 'error') {
     saveStatus.textContent = 'Error saving';
-    saveStatus.classList.remove('saving');
+    saveStatus.classList.add('error');
   }
 }
 
