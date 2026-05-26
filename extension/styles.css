@@ -1,5 +1,5 @@
 /* ============================================================
-   NoteTab — Soft / Muji edition
+   TabMargin — Soft / Muji edition
    Warm paper canvas, single terracotta accent, no hard borders,
    Manrope for UI, Fraunces italic for the note title.
    ============================================================ */
@@ -377,6 +377,11 @@ body::before {
 
 .save-status.error::before {
   background-color: var(--accent);
+}
+
+.save-status.synced::before {
+  background-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 @keyframes pulse {
