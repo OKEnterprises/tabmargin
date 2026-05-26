@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
-  "name": "NoteTab",
-  "version": "1.0.0",
+  "name": "TabMargin",
+  "version": "2.0.0",
   "description": "Turn your new tab page into a minimalist notepad with persistent storage",
 
   "icons": {
@@ -14,7 +14,7 @@
       "48": "icons/notes.svg",
       "96": "icons/notes.svg"
     },
-    "default_title": "NoteTab Settings",
+    "default_title": "TabMargin Settings",
     "default_popup": "popup.html"
   },
 
@@ -23,7 +23,9 @@
   },
 
   "permissions": [
-    "storage"
+    "storage",
+    "https://api.tabmargin.com/*",
+    "https://*.supabase.co/*"
   ],
 
   "browser_specific_settings": {
