@@ -15,7 +15,7 @@ To install TabMargin in Firefox:
 1. Download or clone this repository
 2. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`
 3. Click "Load Temporary Add-on"
-4. Navigate to the project folder and select `manifest.json`
+4. Navigate to the project folder and select `extension/manifest.json`
 5. Open a new tab to start using TabMargin
 
 Note: As a temporary add-on, TabMargin will remain installed until you restart Firefox. For permanent installation, you would need to package and sign the extension through Mozilla's add-on distribution system.
