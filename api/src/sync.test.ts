@@ -127,7 +127,7 @@ describe('sync merge helper', () => {
       createFallbackNote: fallbackNote,
     })
 
-    expect(result.notes.map(n => n.id)).toEqual(['keep_1'])
+    expect(result.notes.map((n: { id: string }) => n.id)).toEqual(['keep_1'])
   })
 
   it('does not resurrect deleted notes when a later tombstone is present', () => {

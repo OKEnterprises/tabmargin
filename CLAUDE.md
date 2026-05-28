@@ -33,12 +33,14 @@ Monorepo with two independently-deployed projects:
 - Forwards the user's Supabase JWT to PostgREST for `/notes/*` and `/me`; RLS on the `notes` and `subscriptions` tables enforces per-user access (Worker uses the anon key for these paths — no RLS bypass)
 - Webhook path uses the service-role key (RLS-bypassing) because Stripe webhook requests have no user context
 - Endpoints:
+  - `GET /health` — liveness probe, returns `{ ok: true }`
   - `GET /me` — returns `{ email, plan: 'free' | 'pro', subscription }`
   - `GET /notes`, `PUT /notes/:id`, `DELETE /notes/:id` — gated behind `requirePro`; non-subscribers get **402 Payment Required**
   - `POST /billing/checkout` — creates Stripe Checkout Session, returns redirect URL
   - `POST /billing/portal` — creates Customer Portal Session
   - `GET /billing/success`, `GET /billing/cancel` — HTML landing pages for Stripe redirects
-  - `POST /webhooks/stripe` — signature-verified, upserts the `subscriptions` row on `customer.subscription.{created,updated,deleted}`. Reads `current_period_end` from either Subscription or SubscriptionItem (moved in API 2025-04-30)
+  - `GET /reset-password` — server-rendered password-reset page (Supabase recovery-email redirect target); its CSP widens `connect-src` to `SUPABASE_URL` so the inline script can PUT to `/auth/v1/user`. Lives in `routes/account.ts`.
+  - `POST /webhooks/stripe` — signature-verified, upserts the `subscriptions` row on `customer.subscription.{created,updated,deleted}`. Reads `current_period_end` from either Subscription or SubscriptionItem (moved in API 2025-04-30). The Stripe client pins `apiVersion` `2025-02-24.acacia`.
 
 **Storage Schema**
 ```javascript
@@ -98,6 +100,26 @@ npm run dev                       # wrangler dev — http://localhost:8787
 ```
 
 The `.dev.vars` file is gitignored; production secrets are configured via `wrangler secret put`.
+
+### Running the tests
+
+```
+cd api && npm test          # vitest run
+```
+
+This single suite covers both the API routes (`src/routes/notes.test.ts`) and the
+extension's sync-merge logic (`src/sync.test.ts`, which imports `extension/sync.js`
+directly), so it's the one command to run after changing either side of the sync path.
+
+`npm run typecheck` type-checks `src/` (test files are excluded from the main
+`tsconfig.json`; `tsconfig.test.json` + `npm run typecheck:test` cover them).
+
+### Versioning policy
+
+The extension (`extension/manifest.json`) and the API (`api/package.json`) version
+independently. The manifest version is the AMO-published add-on version (user-facing,
+must increase on every AMO upload); the API's `package.json` version is internal and
+not user-visible. Bumping one does not require bumping the other.
 
 ### Making Changes
 

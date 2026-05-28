@@ -10,6 +10,10 @@ const app = new Hono<{ Bindings: Bindings }>()
 
 app.use('*', apiCors)
 
+// The *Routes() factories return a fresh Hono sub-app per call. There's no DI to
+// inject (env arrives per-request via c.env), so the factory exists mainly to keep
+// each module self-contained and independently mountable/testable.
+//
 // URL surface (route modules declare their own full paths, so meRoutes /
 // billingRoutes / accountRoutes all mount at '/'):
 //   GET    /health                          — liveness probe
