@@ -12,7 +12,7 @@ Monorepo with two independently-deployed projects:
 
 - `extension/` — the Firefox extension (plain HTML/CSS/JS, no build step)
 - `api/` — Cloudflare Workers API (TypeScript, Hono) handling cloud sync against Supabase
-- `api/db/schema.sql` — Supabase schema and RLS policies
+- `supabase/migrations/` — Supabase schema & RLS policies, managed with the Supabase CLI (`supabase db push`)
 
 ## Architecture
 
@@ -28,7 +28,7 @@ Monorepo with two independently-deployed projects:
 - Saves theme preference to `browser.storage.local`
 - Changes propagate instantly to all open tabs via storage listener
 
-**Sync API (`api/src/index.ts`)**
+**Sync API (`api/src/` — `index.ts` composes the modular `routes/`, `auth.ts`, `db.ts`, `security.ts`, `validation.ts`, `types.ts`)**
 - Hono app on Cloudflare Workers
 - Forwards the user's Supabase JWT to PostgREST for `/notes/*` and `/me`; RLS on the `notes` and `subscriptions` tables enforces per-user access (Worker uses the anon key for these paths — no RLS bypass)
 - Webhook path uses the service-role key (RLS-bypassing) because Stripe webhook requests have no user context
