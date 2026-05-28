@@ -12,4 +12,16 @@ export type Bindings = {
 export type SubRow = {
   status: string
   current_period_end: string | null
+  cancel_at_period_end?: boolean
+}
+
+// Shape of a row in the `notes` table as selected by the notes routes.
+// On tombstone reads (deleted_at set) the API strips title/content, hence optional.
+export type NoteRow = {
+  id: string
+  title?: string
+  content?: string
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
 }

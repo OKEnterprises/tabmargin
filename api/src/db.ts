@@ -16,7 +16,11 @@ export function serviceClient(env: Bindings): SupabaseClient {
 }
 
 export function supabaseFail(c: Context, error: { message: string; code?: string }) {
+  // Log the raw PostgREST detail server-side; return a generic message so we
+  // don't leak schema/driver internals to clients. PGRST303 = JWT expired/invalid.
   console.error('supabase error:', error)
-  const status = error.code === 'PGRST303' ? 401 : 500
-  return c.json({ error: error.message, code: error.code }, status)
+  if (error.code === 'PGRST303') {
+    return c.json({ error: 'session expired', code: 'token_expired' }, 401)
+  }
+  return c.json({ error: 'internal error' }, 500)
 }

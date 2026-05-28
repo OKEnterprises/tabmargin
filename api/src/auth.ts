@@ -9,6 +9,13 @@ export function isActivePro(sub: SubRow | null): boolean {
   return true
 }
 
+// Cheap gate: asserts a `Bearer <jwt>` header is present and forwards it to
+// PostgREST via userClient(). It does NOT verify the token itself — Supabase
+// RLS (auth.uid() = user_id) is the authoritative check on every /notes and
+// /me query, and a bad/expired token surfaces as a downstream 401/PGRST303.
+// Handlers that need the user object (e.g. checkout) additionally call
+// sb.auth.getUser(); /billing/portal skips it because its only query is the
+// RLS-gated subscriptions lookup.
 export const requireAuth: MiddlewareHandler<{ Bindings: Bindings }> = async (c, next) => {
   const auth = c.req.header('Authorization')
   if (!auth?.startsWith('Bearer ')) {
