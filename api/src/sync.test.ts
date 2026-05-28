@@ -102,6 +102,34 @@ describe('sync merge helper', () => {
     expect(result.notes[0].updatedAt).toBe('2026-05-27T00:10:00.000Z')
   })
 
+  it('does not resurrect a note whose delete is still pending locally', () => {
+    // The note is already gone locally; the inclusive `since` cursor re-returns
+    // the still-live remote row. With it in pendingDeleteIds the merge must drop it.
+    const result = mergeRemoteNotes({
+      notes: [{
+        id: 'keep_1',
+        title: 'Keep',
+        content: 'Body',
+        createdAt: '2026-05-27T00:00:00.000Z',
+        updatedAt: '2026-05-27T00:00:00.000Z',
+      }],
+      currentNoteId: 'keep_1',
+      remoteNotes: [{
+        id: 'gone_1',
+        title: 'Zombie',
+        content: 'Back from the dead',
+        created_at: '2026-05-27T00:00:00.000Z',
+        updated_at: '2026-05-27T00:05:00.000Z',
+        deleted_at: null,
+      }],
+      dirtyNoteIds: [],
+      pendingDeleteIds: ['gone_1'],
+      createFallbackNote: fallbackNote,
+    })
+
+    expect(result.notes.map(n => n.id)).toEqual(['keep_1'])
+  })
+
   it('does not resurrect deleted notes when a later tombstone is present', () => {
     const result = mergeRemoteNotes({
       notes: [],

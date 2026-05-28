@@ -14,6 +14,7 @@ let syncError = false;
 let needsUpgrade = false;
 let flushTimer = null;
 let lastSyncAt = null;
+let editEpoch = 0;
 
 // DOM elements
 const sidebar = document.getElementById('sidebar');
@@ -126,13 +127,16 @@ function getCurrentNote() {
 function updateCurrentNote() {
   const currentNote = getCurrentNote();
   if (!currentNote) return;
-  const nextTitle = noteTitle.value.trim() || 'Untitled Note';
+  const nextTitle = noteTitle.value.trim();
   const nextContent = editor.value;
   if (currentNote.title === nextTitle && currentNote.content === nextContent) return;
   currentNote.title = nextTitle;
   currentNote.content = nextContent;
   currentNote.updatedAt = new Date().toISOString();
   dirtyNotes.add(currentNote.id);
+  // Bump on every real edit so an in-flight pull can tell whether the user typed
+  // during its await and avoid clobbering the live editor (see pullAndMerge).
+  editEpoch++;
 }
 
 function switchNote(noteId) {
@@ -416,6 +420,7 @@ async function pullAndMerge() {
 
   // capture any in-flight edits so LWW keeps the user's current typing
   updateCurrentNote();
+  const epochAtPull = editEpoch;
 
   isSyncing = true;
   syncError = false;
@@ -424,6 +429,9 @@ async function pullAndMerge() {
   try {
     const remoteNotes = await TabMarginAPI.fetchRemoteNotes(lastSyncAt);
     needsUpgrade = false;
+    // Flush anything typed *during* the await into state (and mark it dirty) so
+    // the merge treats the current note as a local edit instead of overwriting it.
+    updateCurrentNote();
     mergeRemote(remoteNotes);
     for (const remote of remoteNotes) {
       lastSyncAt = maxIso(lastSyncAt, remote.updated_at);
@@ -435,8 +443,13 @@ async function pullAndMerge() {
       pendingDeleteIds: [...pendingDeletes],
       lastSyncAt
     });
+    // renderNotesList already refreshed the list + active highlight. Only reset
+    // the editor from state if the user hasn't typed since the pull began;
+    // otherwise leave their live text untouched (state already matches it).
     renderNotesList();
-    loadCurrentNote();
+    if (editEpoch === epochAtPull) {
+      loadCurrentNote();
+    }
   } catch (err) {
     console.error('Pull failed:', err);
     if (err.status === 402) {
@@ -458,6 +471,7 @@ function mergeRemote(remoteNotes) {
     currentNoteId: state.currentNoteId,
     remoteNotes,
     dirtyNoteIds: [...dirtyNotes],
+    pendingDeleteIds: [...pendingDeletes],
     createFallbackNote: createNewNote
   });
 

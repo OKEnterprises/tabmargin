@@ -90,9 +90,19 @@
     }
   }
 
+  // Refresh slightly before the stored expiry so we don't spend a guaranteed
+  // 401 + refresh + retry on every sync that starts with an expired token.
+  const TOKEN_REFRESH_SKEW_MS = 60_000;
+
   async function apiRequest(path, options = {}, retried = false) {
-    const session = await getSession();
+    let session = await getSession();
     if (!session) throw new Error('Not signed in');
+
+    // Proactive refresh; the reactive 401 path below stays as a fallback.
+    if (!retried && session.expires_at && Date.now() >= session.expires_at - TOKEN_REFRESH_SKEW_MS) {
+      const refreshed = await refreshSession();
+      if (refreshed) session = await getSession();
+    }
 
     const res = await fetch(`${API_URL}${path}`, {
       ...options,
@@ -111,7 +121,7 @@
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       let body = null;
-      try { body = JSON.parse(text); } catch {}
+      try { body = JSON.parse(text); } catch { /* non-JSON error body; fall back to status */ }
       const err = new Error(body?.error || `API ${res.status}`);
       err.status = res.status;
       err.code = body?.code;
