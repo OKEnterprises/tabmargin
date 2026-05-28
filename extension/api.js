@@ -121,8 +121,9 @@
     return res.json();
   }
 
-  async function fetchRemoteNotes() {
-    const data = await apiRequest('/notes');
+  async function fetchRemoteNotes(since) {
+    const query = since ? `?since=${encodeURIComponent(since)}` : '';
+    const data = await apiRequest(`/notes${query}`);
     return data.notes || [];
   }
 
@@ -146,7 +147,6 @@
       body: JSON.stringify({
         title: note.title,
         content: note.content,
-        updated_at: note.updatedAt,
       }),
     });
   }
