@@ -2,18 +2,25 @@
 -- Run this in the Supabase SQL editor (Dashboard → SQL Editor → New query)
 
 create table public.notes (
-  id text primary key,
+  id text not null,
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   title text not null default '',
   content text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  -- Per-tenant primary key: note ids are client-generated, so they must only be
+  -- unique within a user. A global single-column id PK would let one user's id
+  -- collide with another's and (under RLS) permanently fail the second writer.
+  primary key (user_id, id)
 );
 
 create index notes_user_updated_idx
   on public.notes (user_id, updated_at desc)
   where deleted_at is null;
+
+create index notes_user_updated_all_idx
+  on public.notes (user_id, updated_at desc);
 
 alter table public.notes enable row level security;
 
@@ -57,5 +64,4 @@ alter table public.subscriptions enable row level security;
 create policy "users select own subscription"
   on public.subscriptions for select
   using (auth.uid() = user_id);
-
 

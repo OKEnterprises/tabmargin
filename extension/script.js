@@ -13,6 +13,7 @@ let isSyncing = false;
 let syncError = false;
 let needsUpgrade = false;
 let flushTimer = null;
+let lastSyncAt = null;
 
 // DOM elements
 const sidebar = document.getElementById('sidebar');
@@ -30,7 +31,13 @@ const deleteBtn = document.getElementById('deleteBtn');
 // Storage functions
 async function loadNotes() {
   try {
-    const result = await browser.storage.local.get(['notes', 'currentNoteId']);
+    const result = await browser.storage.local.get([
+      'notes',
+      'currentNoteId',
+      'dirtyNoteIds',
+      'pendingDeleteIds',
+      'lastSyncAt'
+    ]);
 
     if (result.notes && result.notes.length > 0) {
       state.notes = result.notes;
@@ -42,6 +49,7 @@ async function loadNotes() {
       state.currentNoteId = defaultNote.id;
       await saveNotes();
     }
+    loadSyncState(result);
   } catch (error) {
     console.error('Error loading notes:', error);
     // Create default note on error
@@ -51,11 +59,30 @@ async function loadNotes() {
   }
 }
 
+function loadSyncState(result) {
+  dirtyNotes.clear();
+  pendingDeletes.clear();
+  (result.dirtyNoteIds || []).forEach(id => dirtyNotes.add(id));
+  (result.pendingDeleteIds || []).forEach(id => pendingDeletes.add(id));
+  lastSyncAt = result.lastSyncAt || null;
+}
+
+async function saveSyncState() {
+  await browser.storage.local.set({
+    dirtyNoteIds: [...dirtyNotes],
+    pendingDeleteIds: [...pendingDeletes],
+    lastSyncAt
+  });
+}
+
 async function saveNotes() {
   try {
     await browser.storage.local.set({
       notes: state.notes,
-      currentNoteId: state.currentNoteId
+      currentNoteId: state.currentNoteId,
+      dirtyNoteIds: [...dirtyNotes],
+      pendingDeleteIds: [...pendingDeletes],
+      lastSyncAt
     });
     updateSaveStatus('saved');
     scheduleFlush();
@@ -68,7 +95,11 @@ async function saveNotes() {
 // Note operations
 function createNewNote() {
   return {
-    id: Date.now().toString(),
+    // Collision-resistant id: a bare Date.now() string can repeat for notes
+    // created in the same millisecond. base36 time + random suffix stays within
+    // the server's id charset and works on the Firefox 79 baseline (no
+    // crypto.randomUUID, which needs FF 95+).
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
     title: 'Untitled Note',
     content: '',
     createdAt: new Date().toISOString(),
@@ -179,6 +210,7 @@ function renderNotesList() {
   state.notes.forEach(note => {
     const noteItem = document.createElement('div');
     noteItem.className = 'note-item';
+    noteItem.dataset.noteId = note.id;
     if (note.id === state.currentNoteId) {
       noteItem.classList.add('active');
     }
@@ -197,6 +229,19 @@ function renderNotesList() {
     noteItem.addEventListener('click', () => switchNote(note.id));
     notesList.appendChild(noteItem);
   });
+}
+
+function updateActiveNoteListItem() {
+  const currentNote = getCurrentNote();
+  if (!currentNote) return;
+  for (const item of notesList.children) {
+    if (item.dataset.noteId !== currentNote.id) continue;
+    item.querySelector('.note-item-title').textContent = currentNote.title;
+    item.querySelector('.note-item-preview').textContent =
+      currentNote.content.substring(0, 50) || 'Empty note';
+    return;
+  }
+  renderNotesList();
 }
 
 function updateStats() {
@@ -259,7 +304,7 @@ function autoSave() {
   clearTimeout(state.saveTimeout);
   state.saveTimeout = setTimeout(() => {
     updateCurrentNote();
-    renderNotesList();
+    updateActiveNoteListItem();
     saveNotes();
   }, 500); // Save 500ms after user stops typing
 }
@@ -313,6 +358,7 @@ async function flushPending() {
     try {
       await TabMarginAPI.deleteRemoteNote(id);
       pendingDeletes.delete(id);
+      await saveSyncState();
     } catch (err) {
       if (err.status === 402) { hitUpgrade = true; break; }
       console.error('Delete failed for', id, err);
@@ -327,9 +373,27 @@ async function flushPending() {
       dirtyNotes.delete(id);
       continue;
     }
+    // Snapshot what we send. The note object is mutated in place by
+    // updateCurrentNote(), so a keystroke landing during this await would
+    // otherwise have its dirty flag cleared below and never get pushed.
+    const pushedTitle = note.title;
+    const pushedContent = note.content;
     try {
-      await TabMarginAPI.pushNote(note);
+      const result = await TabMarginAPI.pushNote(note);
+      const editedDuringPush =
+        note.title !== pushedTitle || note.content !== pushedContent;
+      if (editedDuringPush) {
+        // Leave it dirty so the next flush re-pushes the newer content, and
+        // don't apply the server timestamps — the local copy is now ahead.
+        continue;
+      }
+      if (result.note) {
+        note.createdAt = result.note.created_at;
+        note.updatedAt = result.note.updated_at;
+        lastSyncAt = maxIso(lastSyncAt, result.note.updated_at);
+      }
       dirtyNotes.delete(id);
+      await saveNotes();
     } catch (err) {
       if (err.status === 402) { hitUpgrade = true; break; }
       console.error('Push failed for', id, err);
@@ -341,6 +405,10 @@ async function flushPending() {
   needsUpgrade = hitUpgrade;
   syncError = hadFailure && !hitUpgrade;
   renderStatus();
+
+  // Re-push notes left dirty by a mid-flight edit. Guarded on no failures so a
+  // persistent network error doesn't hot-loop the 200ms flush.
+  if (!hitUpgrade && !hadFailure && dirtyNotes.size > 0) scheduleFlush();
 }
 
 async function pullAndMerge() {
@@ -354,12 +422,18 @@ async function pullAndMerge() {
   renderStatus();
 
   try {
-    const remoteNotes = await TabMarginAPI.fetchRemoteNotes();
+    const remoteNotes = await TabMarginAPI.fetchRemoteNotes(lastSyncAt);
     needsUpgrade = false;
     mergeRemote(remoteNotes);
+    for (const remote of remoteNotes) {
+      lastSyncAt = maxIso(lastSyncAt, remote.updated_at);
+    }
     await browser.storage.local.set({
       notes: state.notes,
-      currentNoteId: state.currentNoteId
+      currentNoteId: state.currentNoteId,
+      dirtyNoteIds: [...dirtyNotes],
+      pendingDeleteIds: [...pendingDeletes],
+      lastSyncAt
     });
     renderNotesList();
     loadCurrentNote();
@@ -379,47 +453,24 @@ async function pullAndMerge() {
 }
 
 function mergeRemote(remoteNotes) {
-  const byId = new Map(state.notes.map(n => [n.id, n]));
-  const remoteIds = new Set(remoteNotes.map(r => r.id));
+  const merged = TabMarginSync.mergeRemoteNotes({
+    notes: state.notes,
+    currentNoteId: state.currentNoteId,
+    remoteNotes,
+    dirtyNoteIds: [...dirtyNotes],
+    createFallbackNote: createNewNote
+  });
 
-  for (const remote of remoteNotes) {
-    if (remote.deleted_at) {
-      byId.delete(remote.id);
-      continue;
-    }
-    const local = byId.get(remote.id);
-    if (!local) {
-      byId.set(remote.id, remoteToLocal(remote));
-    } else {
-      const localTime = new Date(local.updatedAt).getTime();
-      const remoteTime = new Date(remote.updated_at).getTime();
-      if (remoteTime > localTime) {
-        byId.set(remote.id, remoteToLocal(remote));
-        dirtyNotes.delete(remote.id);
-      } else if (localTime > remoteTime) {
-        dirtyNotes.add(remote.id);
-      }
-    }
-  }
+  state.notes = merged.notes;
+  state.currentNoteId = merged.currentNoteId;
+  dirtyNotes.clear();
+  merged.dirtyNoteIds.forEach(id => dirtyNotes.add(id));
+}
 
-  // Anything we still have locally that the server doesn't know about
-  // needs to be pushed — this covers notes created before sign-in.
-  for (const id of byId.keys()) {
-    if (!remoteIds.has(id)) dirtyNotes.add(id);
-  }
-
-  state.notes = [...byId.values()].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  );
-
-  if (state.notes.length === 0) {
-    const fresh = createNewNote();
-    state.notes = [fresh];
-    state.currentNoteId = fresh.id;
-    dirtyNotes.add(fresh.id);
-  } else if (!state.notes.find(n => n.id === state.currentNoteId)) {
-    state.currentNoteId = state.notes[0].id;
-  }
+function maxIso(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  return new Date(a).getTime() >= new Date(b).getTime() ? a : b;
 }
 
 async function refreshAuthState() {
@@ -428,12 +479,17 @@ async function refreshAuthState() {
   isSignedIn = !!session;
 
   if (isSignedIn && !wasSignedIn) {
+    if (!lastSyncAt && dirtyNotes.size === 0 && pendingDeletes.size === 0) {
+      state.notes.forEach(note => dirtyNotes.add(note.id));
+      await saveSyncState();
+    }
     pullAndMerge();
   } else if (!isSignedIn && wasSignedIn) {
     dirtyNotes.clear();
     pendingDeletes.clear();
     syncError = false;
     needsUpgrade = false;
+    await saveSyncState();
   }
   renderStatus();
 }
