@@ -1,0 +1,9 @@
+# Supabase CLI — volatile local state, do not commit
+.branches
+.temp
+
+# dotenvx / local secrets
+.env
+.env.keys
+.env.local
+.env.*.local
