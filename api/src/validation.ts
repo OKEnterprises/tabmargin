@@ -36,5 +36,8 @@ export function validateNoteBody(body: unknown): NoteInput {
   if (content.length > MAX_NOTE_CONTENT_LENGTH) {
     return { ok: false, status: 413, error: 'content too large' }
   }
-  return { ok: true, title: title.trim() || 'Untitled Note', content }
+  // Store the blank title as-is ('' is the table default). The client treats an
+  // empty title as "untitled" and renders the placeholder, so coercing to an
+  // "Untitled Note" string here would collide with a real note named that.
+  return { ok: true, title: title.trim(), content }
 }

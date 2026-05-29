@@ -1,18 +1,30 @@
-// State management
+// Tunables
+const AUTOSAVE_DEBOUNCE_MS = 500;
+const FLUSH_DEBOUNCE_MS = 200;
+const DELETE_CONFIRM_MS = 3000;
+const PREVIEW_LENGTH = 50;
+
+// Persisted document state (mirrored into browser.storage.local)
 let state = {
   notes: [],
-  currentNoteId: null,
-  saveTimeout: null
+  currentNoteId: null
 };
 
-// Sync state
+// Transient UI state & timers (never persisted)
+let saveTimeout = null;
+let flushTimer = null;
+let deleteConfirmTimeout = null;
+let localSaveState = 'saved'; // 'saving' | 'saved' | 'error'
+let editEpoch = 0;
+let storageReadFailed = false; // true if the initial load threw; blocks saves
+
+// Sync flags & cursors
 const dirtyNotes = new Set();
 const pendingDeletes = new Set();
 let isSignedIn = false;
 let isSyncing = false;
 let syncError = false;
 let needsUpgrade = false;
-let flushTimer = null;
 let lastSyncAt = null;
 
 // DOM elements
@@ -51,11 +63,15 @@ async function loadNotes() {
     }
     loadSyncState(result);
   } catch (error) {
+    // A read hiccup is NOT an empty store. Show an in-memory note so the UI is
+    // usable, but flag the failure so saveNotes() won't persist this default
+    // over the user's real (unread) notes. Surface it via the status channel.
     console.error('Error loading notes:', error);
-    // Create default note on error
+    storageReadFailed = true;
     const defaultNote = createNewNote();
     state.notes = [defaultNote];
     state.currentNoteId = defaultNote.id;
+    updateSaveStatus('error');
   }
 }
 
@@ -76,6 +92,12 @@ async function saveSyncState() {
 }
 
 async function saveNotes() {
+  // The initial read failed, so we can't trust that state reflects what's on
+  // disk — persisting now could clobber real notes. Stay in the error state.
+  if (storageReadFailed) {
+    updateSaveStatus('error');
+    return;
+  }
   try {
     await browser.storage.local.set({
       notes: state.notes,
@@ -100,7 +122,7 @@ function createNewNote() {
     // the server's id charset and works on the Firefox 79 baseline (no
     // crypto.randomUUID, which needs FF 95+).
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
-    title: 'Untitled Note',
+    title: '',
     content: '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -126,17 +148,23 @@ function getCurrentNote() {
 function updateCurrentNote() {
   const currentNote = getCurrentNote();
   if (!currentNote) return;
-  const nextTitle = noteTitle.value.trim() || 'Untitled Note';
+  const nextTitle = noteTitle.value.trim();
   const nextContent = editor.value;
   if (currentNote.title === nextTitle && currentNote.content === nextContent) return;
   currentNote.title = nextTitle;
   currentNote.content = nextContent;
   currentNote.updatedAt = new Date().toISOString();
   dirtyNotes.add(currentNote.id);
+  // Bump on every real edit so an in-flight pull can tell whether the user typed
+  // during its await and avoid clobbering the live editor (see pullAndMerge).
+  editEpoch++;
 }
 
 function switchNote(noteId) {
   updateCurrentNote();
+  // Refresh the note we're leaving in the sidebar (its edits may not have been
+  // flushed by the autosave debounce yet) before moving the highlight.
+  updateActiveNoteListItem();
   if (deleteConfirmTimeout) resetDeleteConfirm();
 
   state.currentNoteId = noteId;
@@ -144,10 +172,9 @@ function switchNote(noteId) {
   saveNotes();
 }
 
-let deleteConfirmTimeout = null;
-
 function resetDeleteConfirm() {
   deleteBtn.classList.remove('confirming');
+  deleteBtn.setAttribute('aria-label', 'Delete note');
   clearTimeout(deleteConfirmTimeout);
   deleteConfirmTimeout = null;
 }
@@ -157,7 +184,7 @@ function performDelete() {
 
   if (state.notes.length === 1) {
     const currentNote = getCurrentNote();
-    currentNote.title = 'Untitled Note';
+    currentNote.title = '';
     currentNote.content = '';
     currentNote.updatedAt = new Date().toISOString();
     dirtyNotes.add(currentNote.id);
@@ -190,20 +217,41 @@ function deleteCurrentNote() {
   }
 
   deleteBtn.classList.add('confirming');
-  deleteConfirmTimeout = setTimeout(resetDeleteConfirm, 3000);
+  // Update the accessible name so AT users perceive the "really?" confirm state
+  // (the CSS-only label swap is invisible to screen readers).
+  deleteBtn.setAttribute('aria-label', 'Confirm delete note');
+  deleteConfirmTimeout = setTimeout(resetDeleteConfirm, DELETE_CONFIRM_MS);
 }
 
 // UI functions
+
+// Blank titles are stored as '' — show a placeholder in the sidebar (the title
+// input has its own HTML placeholder), so a note literally named "Untitled Note"
+// stays distinct from an untitled one.
+function noteListTitle(note) {
+  return note.title || 'Untitled';
+}
+
 function loadCurrentNote() {
   const currentNote = getCurrentNote();
   if (currentNote) {
-    noteTitle.value = currentNote.title === 'Untitled Note' ? '' : currentNote.title;
+    noteTitle.value = currentNote.title;
     editor.value = currentNote.content;
     updateStats();
-    renderNotesList();
+    setActiveNoteItem();
   }
 }
 
+// Move the .active highlight without rebuilding the list (used on note switch).
+function setActiveNoteItem() {
+  for (const item of notesList.children) {
+    item.classList.toggle('active', item.dataset.noteId === state.currentNoteId);
+  }
+}
+
+// Full rebuild — reserved for add/delete/merge, where the set of notes changes.
+// Clicks are handled by one delegated listener on #notesList (see init), so we
+// don't re-bind per item here.
 function renderNotesList() {
   notesList.innerHTML = '';
 
@@ -217,16 +265,14 @@ function renderNotesList() {
 
     const title = document.createElement('div');
     title.className = 'note-item-title';
-    title.textContent = note.title;
+    title.textContent = noteListTitle(note);
 
     const preview = document.createElement('div');
     preview.className = 'note-item-preview';
-    preview.textContent = note.content.substring(0, 50) || 'Empty note';
+    preview.textContent = note.content.substring(0, PREVIEW_LENGTH) || 'Empty note';
 
     noteItem.appendChild(title);
     noteItem.appendChild(preview);
-
-    noteItem.addEventListener('click', () => switchNote(note.id));
     notesList.appendChild(noteItem);
   });
 }
@@ -236,9 +282,9 @@ function updateActiveNoteListItem() {
   if (!currentNote) return;
   for (const item of notesList.children) {
     if (item.dataset.noteId !== currentNote.id) continue;
-    item.querySelector('.note-item-title').textContent = currentNote.title;
+    item.querySelector('.note-item-title').textContent = noteListTitle(currentNote);
     item.querySelector('.note-item-preview').textContent =
-      currentNote.content.substring(0, 50) || 'Empty note';
+      currentNote.content.substring(0, PREVIEW_LENGTH) || 'Empty note';
     return;
   }
   renderNotesList();
@@ -252,8 +298,6 @@ function updateStats() {
   charCount.textContent = `${chars} character${chars !== 1 ? 's' : ''}`;
   wordCount.textContent = `${words} word${words !== 1 ? 's' : ''}`;
 }
-
-let localSaveState = 'saved'; // 'saving' | 'saved' | 'error'
 
 function updateSaveStatus(status) {
   localSaveState = status;
@@ -301,12 +345,12 @@ function renderStatus() {
 function autoSave() {
   updateSaveStatus('saving');
 
-  clearTimeout(state.saveTimeout);
-  state.saveTimeout = setTimeout(() => {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
     updateCurrentNote();
     updateActiveNoteListItem();
     saveNotes();
-  }, 500); // Save 500ms after user stops typing
+  }, AUTOSAVE_DEBOUNCE_MS);
 }
 
 // Export functionality
@@ -314,11 +358,18 @@ function exportNote() {
   const currentNote = getCurrentNote();
   if (!currentNote) return;
 
+  // Sanitize the title into a safe, predictable filename: strip path/reserved
+  // chars (/ \ : * ? " < > |) and control chars, collapse whitespace.
+  const base = (currentNote.title || 'note')
+    .replace(/[\/\\:*?"<>|\x00-\x1f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || 'note';
+
   const blob = new Blob([currentNote.content], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${currentNote.title}.txt`;
+  a.download = `${base}.txt`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -329,17 +380,7 @@ function exportNote() {
 function scheduleFlush() {
   if (!isSignedIn) return;
   clearTimeout(flushTimer);
-  flushTimer = setTimeout(flushPending, 200);
-}
-
-function remoteToLocal(r) {
-  return {
-    id: r.id,
-    title: r.title,
-    content: r.content,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at
-  };
+  flushTimer = setTimeout(flushPending, FLUSH_DEBOUNCE_MS);
 }
 
 async function flushPending() {
@@ -416,6 +457,7 @@ async function pullAndMerge() {
 
   // capture any in-flight edits so LWW keeps the user's current typing
   updateCurrentNote();
+  const epochAtPull = editEpoch;
 
   isSyncing = true;
   syncError = false;
@@ -424,6 +466,9 @@ async function pullAndMerge() {
   try {
     const remoteNotes = await TabMarginAPI.fetchRemoteNotes(lastSyncAt);
     needsUpgrade = false;
+    // Flush anything typed *during* the await into state (and mark it dirty) so
+    // the merge treats the current note as a local edit instead of overwriting it.
+    updateCurrentNote();
     mergeRemote(remoteNotes);
     for (const remote of remoteNotes) {
       lastSyncAt = maxIso(lastSyncAt, remote.updated_at);
@@ -435,8 +480,13 @@ async function pullAndMerge() {
       pendingDeleteIds: [...pendingDeletes],
       lastSyncAt
     });
+    // renderNotesList already refreshed the list + active highlight. Only reset
+    // the editor from state if the user hasn't typed since the pull began;
+    // otherwise leave their live text untouched (state already matches it).
     renderNotesList();
-    loadCurrentNote();
+    if (editEpoch === epochAtPull) {
+      loadCurrentNote();
+    }
   } catch (err) {
     console.error('Pull failed:', err);
     if (err.status === 402) {
@@ -458,6 +508,7 @@ function mergeRemote(remoteNotes) {
     currentNoteId: state.currentNoteId,
     remoteNotes,
     dirtyNoteIds: [...dirtyNotes],
+    pendingDeleteIds: [...pendingDeletes],
     createFallbackNote: createNewNote
   });
 
@@ -496,10 +547,18 @@ async function refreshAuthState() {
 
 // Event listeners
 toggleSidebarBtn.addEventListener('click', () => {
-  sidebar.classList.toggle('hidden');
+  const hidden = sidebar.classList.toggle('hidden');
+  toggleSidebarBtn.setAttribute('aria-expanded', String(!hidden));
 });
 
 newNoteBtn.addEventListener('click', addNewNote);
+
+// Delegated: one listener for the whole list instead of re-binding per item on
+// every render.
+notesList.addEventListener('click', (e) => {
+  const item = e.target.closest('.note-item');
+  if (item && notesList.contains(item)) switchNote(item.dataset.noteId);
+});
 
 noteTitle.addEventListener('input', () => {
   updateStats();
@@ -516,21 +575,29 @@ deleteBtn.addEventListener('click', deleteCurrentNote);
 
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
-  // Ctrl/Cmd + N: New note
-  if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+  const mod = e.ctrlKey || e.metaKey;
+  if (!mod || e.repeat || e.altKey) return;
+  const key = e.key.toLowerCase();
+
+  // Ctrl/Cmd + Shift + L: New note. (Ctrl/Cmd+N is reserved by the browser for
+  // New Window and fires unreliably, so we keep the new-note shortcut off it.)
+  if (e.shiftKey && key === 'l') {
     e.preventDefault();
     addNewNote();
+    return;
   }
 
+  if (e.shiftKey) return; // remaining shortcuts are unshifted
+
   // Ctrl/Cmd + S: Manual save (already auto-saving, but for user comfort)
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+  if (key === 's') {
     e.preventDefault();
     updateCurrentNote();
     saveNotes();
   }
 
   // Ctrl/Cmd + E: Export
-  if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+  if (key === 'e') {
     e.preventDefault();
     exportNote();
   }
@@ -572,6 +639,7 @@ window.addEventListener('focus', () => {
 async function init() {
   await loadTheme();
   await loadNotes();
+  renderNotesList();
   loadCurrentNote();
   editor.focus();
 
