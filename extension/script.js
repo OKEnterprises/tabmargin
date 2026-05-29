@@ -43,7 +43,7 @@ const deleteBtn = document.getElementById('deleteBtn');
 // Storage functions
 async function loadNotes() {
   try {
-    const result = await browser.storage.local.get([
+    const result = await TabMarginStorage.get([
       'notes',
       'currentNoteId',
       'dirtyNoteIds',
@@ -84,7 +84,7 @@ function loadSyncState(result) {
 }
 
 async function saveSyncState() {
-  await browser.storage.local.set({
+  await TabMarginStorage.set({
     dirtyNoteIds: [...dirtyNotes],
     pendingDeleteIds: [...pendingDeletes],
     lastSyncAt
@@ -99,7 +99,7 @@ async function saveNotes() {
     return;
   }
   try {
-    await browser.storage.local.set({
+    await TabMarginStorage.set({
       notes: state.notes,
       currentNoteId: state.currentNoteId,
       dirtyNoteIds: [...dirtyNotes],
@@ -473,7 +473,7 @@ async function pullAndMerge() {
     for (const remote of remoteNotes) {
       lastSyncAt = maxIso(lastSyncAt, remote.updated_at);
     }
-    await browser.storage.local.set({
+    await TabMarginStorage.set({
       notes: state.notes,
       currentNoteId: state.currentNoteId,
       dirtyNoteIds: [...dirtyNotes],
@@ -606,7 +606,7 @@ document.addEventListener('keydown', (e) => {
 // Theme management
 async function loadTheme() {
   try {
-    const result = await browser.storage.local.get('theme');
+    const result = await TabMarginStorage.get('theme');
     const theme = result.theme || 'system';
     applyTheme(theme);
   } catch (error) {
@@ -620,7 +620,7 @@ function applyTheme(theme) {
 }
 
 // Listen for theme + auth changes from settings popup
-browser.storage.onChanged.addListener((changes, area) => {
+TabMarginStorage.onChanged((changes, area) => {
   if (area !== 'local') return;
   if (changes.theme) {
     applyTheme(changes.theme.newValue);
@@ -647,5 +647,11 @@ async function init() {
   await refreshAuthState();
 }
 
-// Start the application
-init();
+// Expose the editor's entry points so the web shell (app.js) can boot it after
+// login and re-check auth in the active tab (where the storage event doesn't
+// fire). The extension doesn't use these — it boots immediately below.
+window.TabMarginEditor = { init, refreshAuthState };
+
+// Start the application. The web build sets TabMarginEnv.deferInit so app.js can
+// gate the editor behind sign-in; the extension leaves it unset and boots now.
+if (!window.TabMarginEnv?.deferInit) init();

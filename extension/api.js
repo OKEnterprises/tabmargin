@@ -24,7 +24,7 @@
   }
 
   function storeSession(session) {
-    return browser.storage.local.set({
+    return TabMarginStorage.set({
       auth: {
         access_token: session.access_token,
         refresh_token: session.refresh_token,
@@ -35,7 +35,7 @@
   }
 
   async function getSession() {
-    const { auth } = await browser.storage.local.get('auth');
+    const { auth } = await TabMarginStorage.get('auth');
     return auth || null;
   }
 
@@ -72,7 +72,7 @@
         },
       }).catch(() => {});
     }
-    await browser.storage.local.remove('auth');
+    await TabMarginStorage.remove('auth');
   }
 
   async function refreshSession() {
@@ -85,7 +85,7 @@
       await storeSession(data);
       return data;
     } catch {
-      await browser.storage.local.remove('auth');
+      await TabMarginStorage.remove('auth');
       return null;
     }
   }

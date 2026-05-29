@@ -1,0 +1,122 @@
+/* ============================================================
+   TabMargin — web shell (app.tabmargin.com)
+   Adds the login gate and the settings slide-over on top of the
+   editor (styles.css) and account (popup.css) components shared
+   with the extension. Tokens live in tokens.css.
+   ============================================================ */
+
+/* The shared editor layout assumes it owns the viewport; popup.css pins the
+   body to 280px (it's a popup there). Undo that for the full-page app. */
+body { width: auto; min-width: 0; }
+
+/* The hidden attribute must beat component display rules (.container/.auth-gate
+   set display, which would otherwise override the UA [hidden] = display:none). */
+[hidden] { display: none !important; }
+
+/* ----- Auth gate ----- */
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+  background-color: var(--bg-canvas);
+  animation: settle 0.6s var(--ease);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 320px;
+  background-color: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  padding: 32px 28px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+}
+
+.brand {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink-primary);
+}
+
+.auth-tagline {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin: 4px 0 22px;
+  line-height: 1.5;
+}
+
+/* The shared .auth-form pads 0 4px for the narrow popup; the card already pads. */
+.auth-card .auth-form { padding: 0; }
+.auth-card .auth-message { margin-top: 14px; }
+
+/* ----- Settings toggle (gear) ----- */
+.settings-toggle {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 30;
+  background: transparent;
+  border: none;
+  padding: 7px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.25s var(--ease), background-color 0.25s var(--ease);
+}
+
+.settings-toggle:hover {
+  color: var(--ink-primary);
+  background-color: var(--bg-recessed);
+}
+
+.settings-toggle svg { width: 18px; height: 18px; }
+
+/* ----- Settings slide-over ----- */
+.settings-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background-color: rgba(20, 16, 8, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s var(--ease);
+}
+
+.settings-scrim.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.settings-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 320px;
+  max-width: 86vw;
+  z-index: 46;
+  background-color: var(--bg-recessed);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.10);
+  overflow-y: auto;
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform 0.3s var(--ease), visibility 0.3s var(--ease);
+}
+
+.settings-panel.open {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.settings-panel-inner { padding: 28px 22px; }
+
+@media (max-width: 768px) {
+  .settings-toggle { top: 18px; right: 18px; }
+}

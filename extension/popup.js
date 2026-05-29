@@ -5,7 +5,7 @@ function applyTheme(theme) {
 
 async function loadThemePreference() {
   try {
-    const result = await browser.storage.local.get('theme');
+    const result = await TabMarginStorage.get('theme');
     const theme = result.theme || 'system';
     applyTheme(theme);
     const radio = document.querySelector(`input[value="${theme}"]`);
@@ -17,7 +17,7 @@ async function loadThemePreference() {
 
 async function saveThemePreference(theme) {
   try {
-    await browser.storage.local.set({ theme });
+    await TabMarginStorage.set({ theme });
     applyTheme(theme);
   } catch (error) {
     console.error('Error saving theme preference:', error);
@@ -72,6 +72,11 @@ function setBusy(busy) {
 
 async function renderAccountView() {
   const session = await TabMarginAPI.getSession();
+  // Web shell hook: lets app.js gate the editor on sign-in/out. Undefined (no-op)
+  // in the extension, where the editor and popup are separate contexts.
+  if (typeof window.TabMarginOnAuthChange === 'function') {
+    window.TabMarginOnAuthChange(session?.user?.email ? session : null);
+  }
   if (!session?.user?.email) {
     signedOutView.hidden = false;
     signedInView.hidden = true;
@@ -115,8 +120,7 @@ async function openInTab(getUrl, button, busyLabel) {
   button.disabled = true;
   try {
     const url = await getUrl();
-    await browser.tabs.create({ url, active: true });
-    window.close();
+    await TabMarginEnv.openUrl(url);
   } catch (err) {
     console.error(err);
     button.textContent = original;
@@ -199,10 +203,14 @@ signOutBtn.addEventListener('click', async () => {
   }
 });
 
-browser.storage.onChanged.addListener((changes, area) => {
+TabMarginStorage.onChanged((changes, area) => {
   if (area === 'local' && changes.auth) {
     renderAccountView();
   }
 });
+
+// Expose for the web shell (app.js): re-render the account panel after returning
+// from Stripe (focus) so the plan badge flips Free→Pro. Unused in the extension.
+window.TabMarginAccount = { renderAccountView };
 
 renderAccountView();
