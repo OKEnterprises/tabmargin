@@ -1,72 +1,10 @@
 /* ============================================================
    TabMargin — Soft / Muji edition
-   Warm paper canvas, single terracotta accent, no hard borders,
-   Manrope for UI, Fraunces italic for the note title.
+   Warm paper canvas, single earth accent, no hard borders,
+   Manrope throughout. Design tokens live in tokens.css.
    ============================================================ */
 
-/* ----- Theme tokens ----- */
-:root {
-  /* Light — warm paper */
-  --bg-canvas: #f7f3ec;
-  --bg-recessed: #efeae0;
-  --bg-elevated: #fcf9f3;
-  --ink-primary: #2a2520;
-  --ink-secondary: #8a7e72;
-  --ink-tertiary: #b8aea0;
-  --accent: #b87055;
-  --accent-soft: #e8d5cc;
-  --grain-opacity: 0.035;
-  --grain-blend: multiply;
-
-  --font-ui: 'Manrope', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
-
-  --radius-sm: 6px;
-  --radius-md: 10px;
-
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg-canvas: #1a1612;
-    --bg-recessed: #141008;
-    --bg-elevated: #221d17;
-    --ink-primary: #ebe2d4;
-    --ink-secondary: #8a7e72;
-    --ink-tertiary: #5a5048;
-    --accent: #d99373;
-    --accent-soft: #3a2820;
-    --grain-opacity: 0.05;
-    --grain-blend: screen;
-  }
-}
-
-:root[data-theme="dark"] {
-  --bg-canvas: #1a1612;
-  --bg-recessed: #141008;
-  --bg-elevated: #221d17;
-  --ink-primary: #ebe2d4;
-  --ink-secondary: #8a7e72;
-  --ink-tertiary: #5a5048;
-  --accent: #d99373;
-  --accent-soft: #3a2820;
-  --grain-opacity: 0.05;
-  --grain-blend: screen;
-}
-
-:root[data-theme="light"] {
-  --bg-canvas: #f7f3ec;
-  --bg-recessed: #efeae0;
-  --bg-elevated: #fcf9f3;
-  --ink-primary: #2a2520;
-  --ink-secondary: #8a7e72;
-  --ink-tertiary: #b8aea0;
-  --accent: #b87055;
-  --accent-soft: #e8d5cc;
-  --grain-opacity: 0.035;
-  --grain-blend: multiply;
-}
+/* Design tokens: see tokens.css */
 
 /* ----- Reset ----- */
 * {
@@ -102,7 +40,7 @@ body::before {
   z-index: 1000;
   opacity: var(--grain-opacity);
   mix-blend-mode: var(--grain-blend);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
 }
 
 /* ----- Layout ----- */
@@ -139,10 +77,9 @@ body::before {
 
 .sidebar-header h2 {
   font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
   color: var(--ink-secondary);
 }
 
@@ -153,7 +90,7 @@ body::before {
 }
 
 .note-item {
-  padding: 12px 14px;
+  padding: 12px;
   margin-bottom: 2px;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -193,7 +130,7 @@ body::before {
 }
 
 .note-item-preview {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -227,7 +164,7 @@ body::before {
 }
 
 .toggle-sidebar:hover {
-  color: var(--accent);
+  color: var(--ink-primary);
   background-color: var(--bg-recessed);
 }
 
@@ -249,12 +186,11 @@ body::before {
 }
 
 .note-title {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-weight: 400;
-  font-size: 38px;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 28px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
   border: none;
   outline: none;
   background: transparent;
@@ -267,7 +203,6 @@ body::before {
 
 .note-title::placeholder {
   color: var(--ink-tertiary);
-  font-style: italic;
 }
 
 /* Hairline accent that fades in on focus — a soft pen-mark */
@@ -351,7 +286,7 @@ body::before {
 .save-status {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   color: var(--ink-secondary);
   margin-right: 12px;
   font-size: 12px;
@@ -376,7 +311,7 @@ body::before {
 }
 
 .save-status.error::before {
-  background-color: var(--accent);
+  background-color: var(--danger);
 }
 
 .save-status.synced::before {
@@ -410,7 +345,7 @@ button {
 }
 
 .btn-icon:hover {
-  color: var(--accent);
+  color: var(--ink-primary);
   background-color: var(--bg-elevated);
 }
 
@@ -432,13 +367,13 @@ button {
   justify-content: center;
   transition: color 0.25s var(--ease), background-color 0.25s var(--ease);
   font-family: var(--font-ui);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.02em;
   min-height: 30px;
 }
 
 .btn-icon-action:hover {
-  color: var(--accent);
+  color: var(--ink-primary);
   background-color: var(--bg-recessed);
 }
 
@@ -452,8 +387,8 @@ button {
 .btn-icon-action .confirm-label { display: none; }
 
 .btn-icon-action.confirming {
-  background-color: var(--accent-soft);
-  color: var(--accent);
+  background-color: var(--danger-soft);
+  color: var(--danger);
   padding: 6px 14px;
   gap: 6px;
 }
@@ -508,5 +443,5 @@ button {
 
   .sidebar { width: 240px; }
 
-  .note-title { font-size: 30px; }
+  .note-title { font-size: 24px; }
 }
