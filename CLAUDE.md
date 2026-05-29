@@ -6,11 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TabMargin is a Firefox extension (Manifest v2) that replaces the new tab page with a minimalist notepad. Users can create multiple notes, which are auto-saved and persist using the browser's local storage API. An optional paid cloud-sync tier (in progress) syncs notes across devices via a Cloudflare Workers + Hono API backed by Supabase Postgres.
 
+The same experience is also a **hosted web app** at `app.tabmargin.com` (for people who don't use the extension — e.g. iPad users), with a marketing landing page at `tabmargin.com`. The web app reuses the extension's code verbatim through a storage adapter (see "Shared core & storage adapter" below); the web app **requires login**, and like the extension, free users get a local-only notepad while cross-device sync requires Pro.
+
 ## Repo Layout
 
-Monorepo with two independently-deployed projects:
+Monorepo with independently-deployed projects:
 
-- `extension/` — the Firefox extension (plain HTML/CSS/JS, no build step)
+- `extension/` — the Firefox extension (plain HTML/CSS/JS, no build step). **Canonical home of the shared core** (`sync.js`, `api.js`, `script.js`, `popup.js`) — the web app copies these.
+- `web/` — the hosted web app `app.tabmargin.com` (Cloudflare Pages). A thin shell (`storage.js`, `app.js`, `web.css`, `index.html`) over the shared core, assembled by `build.sh` (a `cp`, not a bundler).
+- `site/` — the marketing landing page `tabmargin.com` (Cloudflare Pages). Standalone static HTML/CSS; no shared deps.
 - `api/` — Cloudflare Workers API (TypeScript, Hono) handling cloud sync against Supabase
 - `supabase/migrations/` — Supabase schema & RLS policies, managed with the Supabase CLI (`supabase db push`)
 
@@ -59,6 +63,19 @@ Monorepo with two independently-deployed projects:
 }
 ```
 
+### Shared core & storage adapter
+
+The extension and the web app run the **same** `sync.js` / `api.js` / `script.js` / `popup.js`. The only thing that differs between the two surfaces is storage, abstracted behind a small adapter that each surface provides in its own `storage.js`:
+
+- `window.TabMarginStorage` — `get(keys)→Promise<obj>`, `set(obj)`, `remove(key)`, `onChanged(cb)` where `cb(changes, area)` sees `changes[key] = { newValue }`, `area === 'local'`. Extension impl wraps `browser.storage.local` / `browser.storage.onChanged`; web impl wraps `localStorage` (JSON-encoded) and normalizes the window `storage` event to the same shape.
+- `window.TabMarginEnv` — `openUrl(url)` (extension: new tab + close popup; web: `location.assign`) and `deferInit` (web sets it so `app.js` can gate the editor behind login; the extension boots immediately).
+
+Consequences to keep in mind:
+- **No `browser.*` outside `extension/storage.js`.** Anything in the shared files must go through `TabMarginStorage` / `TabMarginEnv` or it will break on the web. (`grep -rn 'browser\.' extension/*.js` should only hit `storage.js` + comments.)
+- **`storage.js` loads first** on every page, before `sync.js`/`api.js`/`script.js`/`popup.js`.
+- The extension's `browser.storage.local` and the web's `localStorage` are **separate stores on separate origins** — they share no data. Only cloud sync (Pro) bridges the two surfaces.
+- `script.js` exposes `window.TabMarginEditor = { init, refreshAuthState }`; `popup.js` exposes `window.TabMarginAccount = { renderAccountView }` and calls an optional `window.TabMarginOnAuthChange(session)` hook. These are no-ops/unused in the extension and are how `web/app.js` drives the login gate.
+
 ### Theme System Implementation
 
 The theme system uses a data attribute approach:
@@ -100,6 +117,28 @@ npm run dev                       # wrangler dev — http://localhost:8787
 ```
 
 The `.dev.vars` file is gitignored; production secrets are configured via `wrangler secret put`.
+
+### Running & deploying the web app (`app.tabmargin.com`) and site (`tabmargin.com`)
+
+Build the web app locally (copies the shared core from `extension/` + web overlays into `web/dist/`):
+
+```
+cd web && sh build.sh           # or: npm run build
+python3 -m http.server 8795 --directory dist   # then open http://localhost:8795
+```
+
+`web/dist/` is gitignored (a build artifact). Note `api.js` hardcodes the production API/Supabase URLs, so local web testing hits production (same as the extension).
+
+Both web surfaces deploy as **Cloudflare Pages** projects from this repo:
+
+| Project | Custom domain | Root dir | Build command | Output dir |
+|---|---|---|---|---|
+| `tabmargin-app` | `app.tabmargin.com` | `web` | `sh build.sh` | `dist` |
+| `tabmargin-site` | `tabmargin.com`, `www.tabmargin.com` | `site` | *(none)* | `.` |
+
+After first deploy, set the API's CORS allow-list so the web app can call it — add `https://app.tabmargin.com` (mandatory) to `ALLOWED_ORIGINS` (Cloudflare dashboard var / `wrangler secret put ALLOWED_ORIGINS`; `security.ts` reads it at runtime — no code deploy needed). `tabmargin.com` only needs adding if the landing itself ever calls the API (it currently just deep-links to the app). `BILLING_RETURN_URL` stays pointed at the Worker — its `/billing/success|cancel` pages are platform-neutral and the web app re-checks `/me` on focus to flip the plan badge after Stripe.
+
+Verify CORS: `curl -H 'Origin: https://app.tabmargin.com' https://api.tabmargin.com/health -i` should echo `access-control-allow-origin: https://app.tabmargin.com`.
 
 ### Running the tests
 

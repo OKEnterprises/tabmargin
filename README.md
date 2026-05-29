@@ -30,8 +30,10 @@ To change themes, click the TabMargin icon in your Firefox toolbar. Select your 
 
 ## Development
 
-TabMargin is built with vanilla HTML, CSS, and JavaScript—no build tools or dependencies required. The extension uses Firefox's WebExtensions API (Manifest v2) for storage and browser integration. All notes are stored locally using `browser.storage.local`, ensuring your data never leaves your device.
+TabMargin is built with vanilla HTML, CSS, and JavaScript—no build tools or dependencies required. The extension uses Firefox's WebExtensions API (Manifest v2) for storage and browser integration. By default all notes are stored locally using `browser.storage.local`, so your data never leaves your device; an optional Pro tier syncs them across devices.
 
 The codebase consists of two main components: the new tab page (`newtab.html`, `script.js`, `styles.css`) and the settings popup (`popup.html`, `popup.js`, `popup.css`). The theme system uses CSS custom properties with a data attribute on the document root, allowing for seamless switching between themes. SVG icons are dynamically colored using CSS filters that adapt to the current theme.
+
+The same experience is also available as a hosted web app at **app.tabmargin.com** (with a landing page at **tabmargin.com**) for people who don't use the extension. The web app reuses the extension's code through a small storage adapter — see `CLAUDE.md` for the monorepo layout (`extension/`, `web/`, `site/`, `api/`) and deploy details.
 
 After making changes to the code, reload the extension from `about:debugging` to see your updates. The simplicity of the architecture makes it easy to extend with new features or customize to your preferences.
