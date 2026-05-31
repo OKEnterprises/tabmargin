@@ -12,14 +12,27 @@ export function landingPage(styleNonce: string, title: string, heading: string, 
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&family=Fraunces:ital,opsz,wght@1,9..144,400&display=swap">
   <style nonce="${styleNonce}">
-    :root { color-scheme: light dark; }
+    /* Token values copied from extension/tokens.css (warm-paper palette) so these
+       server-rendered pages match the app. Dark mode overrides only the custom
+       properties; every element rule reads var(--…), so the base rules can't be
+       defeated by source order the way the old hard-coded @media block was. */
+    :root {
+      color-scheme: light dark;
+      --bg-canvas: #f7f3ec; --bg-recessed: #efeae0; --bg-elevated: #fcf9f3;
+      --ink-primary: #2a2520; --ink-tertiary: #9d9181;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-canvas: #1a1612; --bg-recessed: #141008; --bg-elevated: #221d17;
+        --ink-primary: #ebe2d4; --ink-tertiary: #5a5048;
+      }
+    }
     * { box-sizing: border-box; }
-    body { font-family: 'Manrope', system-ui, sans-serif; background: #f7f3ec; color: #2a2520; margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-    @media (prefers-color-scheme: dark) { body { background: #1a1612; color: #ebe2d4; } .card { background: #221d17; } .meta { color: #8a7e72; } }
-    .card { background: #fcf9f3; border-radius: 16px; padding: 48px 52px; max-width: 460px; text-align: center; }
-    h1 { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 400; font-size: 38px; margin: 0 0 16px; }
+    body { font-family: 'Manrope', system-ui, sans-serif; background: var(--bg-canvas); color: var(--ink-primary); margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .card { background: var(--bg-elevated); border: 1px solid var(--bg-recessed); border-radius: 16px; padding: 48px 52px; max-width: 460px; text-align: center; }
+    h1 { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 400; font-size: 38px; margin: 0 0 16px; color: var(--ink-primary); }
     p { font-size: 15px; line-height: 1.6; margin: 0 0 8px; }
-    .meta { color: #8a7e72; font-size: 13px; margin-top: 20px; }
+    .meta { color: var(--ink-tertiary); font-size: 13px; margin-top: 20px; }
   </style>
 </head>
 <body>
@@ -43,19 +56,39 @@ export function resetPasswordPage(scriptNonce: string, supabaseUrl: string, supa
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&family=Fraunces:ital,opsz,wght@1,9..144,400&display=swap">
   <style nonce="${scriptNonce}">
-    :root { color-scheme: light dark; }
+    /* Token values copied from extension/tokens.css (warm-paper palette) so these
+       server-rendered pages match the app. Dark mode overrides only the custom
+       properties; every element rule reads var(--…), so the base rules can't be
+       defeated by source order the way the old hard-coded @media block was.
+       (The palette has no success-green, so the confirmation uses --ink-primary.) */
+    :root {
+      color-scheme: light dark;
+      --bg-canvas: #f7f3ec; --bg-recessed: #efeae0; --bg-elevated: #fcf9f3;
+      --ink-primary: #2a2520; --ink-secondary: #6f6055; --ink-tertiary: #9d9181;
+      --accent: #b87055; --accent-hover: #a35f47; --on-accent: #fff7ef;
+      --danger: #9e4a3c;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-canvas: #1a1612; --bg-recessed: #141008; --bg-elevated: #221d17;
+        --ink-primary: #ebe2d4; --ink-secondary: #8a7e72; --ink-tertiary: #5a5048;
+        --accent: #d99373; --accent-hover: #c98365; --on-accent: #2a1f18;
+        --danger: #d98b7d;
+      }
+    }
     * { box-sizing: border-box; }
-    body { font-family: 'Manrope', system-ui, sans-serif; background: #f7f3ec; color: #2a2520; margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-    @media (prefers-color-scheme: dark) { body { background: #1a1612; color: #ebe2d4; } .card { background: #221d17; } .meta { color: #8a7e72; } input { background: #1a1612; color: #ebe2d4; border-color: #3a342c; } }
-    .card { background: #fcf9f3; border-radius: 16px; padding: 40px 44px; max-width: 420px; width: 100%; }
-    h1 { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 400; font-size: 32px; margin: 0 0 18px; text-align: center; }
-    label { display: block; font-size: 13px; margin: 14px 0 6px; }
-    input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #d8cfbf; background: #fff; font: inherit; color: inherit; }
-    button { margin-top: 18px; width: 100%; padding: 11px; border-radius: 8px; border: 0; background: #2a2520; color: #fcf9f3; font: inherit; font-weight: 500; cursor: pointer; }
+    body { font-family: 'Manrope', system-ui, sans-serif; background: var(--bg-canvas); color: var(--ink-primary); margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .card { background: var(--bg-elevated); border: 1px solid var(--bg-recessed); border-radius: 16px; padding: 40px 44px; max-width: 420px; width: 100%; }
+    h1 { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 400; font-size: 32px; margin: 0 0 18px; text-align: center; color: var(--ink-primary); }
+    label { display: block; font-size: 13px; margin: 14px 0 6px; color: var(--ink-secondary); }
+    input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--bg-recessed); background: var(--bg-canvas); font: inherit; color: var(--ink-primary); }
+    input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--accent); }
+    button { margin-top: 18px; width: 100%; padding: 11px; border-radius: 8px; border: 0; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 600; cursor: pointer; }
+    button:hover:not([disabled]) { background: var(--accent-hover); }
     button[disabled] { opacity: 0.5; cursor: default; }
-    .meta { color: #8a7e72; font-size: 13px; margin-top: 16px; text-align: center; }
-    .error { color: #b04a3a; font-size: 13px; margin-top: 12px; }
-    .ok { color: #3a7a4a; font-size: 14px; margin-top: 12px; text-align: center; }
+    .meta { color: var(--ink-tertiary); font-size: 13px; margin-top: 16px; text-align: center; }
+    .error { color: var(--danger); font-size: 13px; margin-top: 12px; }
+    .ok { color: var(--ink-primary); font-size: 14px; margin-top: 12px; text-align: center; }
   </style>
 </head>
 <body>
