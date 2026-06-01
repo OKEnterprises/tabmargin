@@ -42,8 +42,8 @@ Monorepo with independently-deployed projects:
   - `GET /notes`, `PUT /notes/:id`, `DELETE /notes/:id` — gated behind `requirePro`; non-subscribers get **402 Payment Required**
   - `POST /billing/checkout` — creates Stripe Checkout Session, returns redirect URL
   - `POST /billing/portal` — creates Customer Portal Session
-  - `GET /billing/success`, `GET /billing/cancel` — HTML landing pages for Stripe redirects
-  - `GET /reset-password` — server-rendered password-reset page (Supabase recovery-email redirect target); its CSP widens `connect-src` to `SUPABASE_URL` so the inline script can PUT to `/auth/v1/user`. Lives in `routes/account.ts`.
+  - `GET /billing/success`, `GET /billing/cancel` — **302 redirect shims** to the static landing pages on the web app (see "Auxiliary static pages" below). Kept so Stripe Sessions created with old `${BILLING_RETURN_URL}/billing/*` URLs still land correctly. Hardcode the web origin (not `BILLING_RETURN_URL`) to avoid a redirect loop while the env is mid-transition.
+  - `GET /reset-password` — **302 redirect shim** to the static reset page on the web app, kept for recovery emails sent before the cutover and older extension installs (whose bundled `api.js` still builds `redirect_to` as `${API_URL}/reset-password`). Supabase puts the recovery token in the URL *fragment*, which survives a fragment-less redirect. Lives in `routes/account.ts`.
   - `POST /webhooks/stripe` — signature-verified, upserts the `subscriptions` row on `customer.subscription.{created,updated,deleted}`. Reads `current_period_end` from either Subscription or SubscriptionItem (moved in API 2025-04-30). The Stripe client pins `apiVersion` `2025-02-24.acacia`.
 
 **Storage Schema**
@@ -75,6 +75,28 @@ Consequences to keep in mind:
 - **`storage.js` loads first** on every page, before `sync.js`/`api.js`/`script.js`/`popup.js`.
 - The extension's `browser.storage.local` and the web's `localStorage` are **separate stores on separate origins** — they share no data. Only cloud sync (Pro) bridges the two surfaces.
 - `script.js` exposes `window.TabMarginEditor = { init, refreshAuthState }`; `popup.js` exposes `window.TabMarginAccount = { renderAccountView }` and calls an optional `window.TabMarginOnAuthChange(session)` hook. These are no-ops/unused in the extension and are how `web/app.js` drives the login gate.
+
+### Auxiliary static pages (reset-password, billing landings)
+
+The password-reset page and the Stripe `billing/success` + `billing/cancel`
+landings are **plain static files in `web/`** (`reset-password.{html,js}`,
+`billing/success.html`, `billing/cancel.html`, shared `pages.css`), served by the
+same Cloudflare Pages project as the app. They link `tokens.css` so they match
+the design system, and `build.sh` copies them into `dist/` (billing pages nested
+under `dist/billing/`). They do **not** load the shared core — `reset-password.js`
+is standalone and inlines the publishable Supabase URL + anon key (same constants
+as `api.js`); its only network call is the password PUT to Supabase, which the
+existing `web/_headers` CSP already allows (`script-src 'self'`, Supabase in
+`connect-src`).
+
+These were previously server-rendered by the Worker (`views/html.ts`, now
+deleted) purely for per-request CSP nonces — unnecessary for pages with no
+injection surface. The Worker keeps **302 redirect shims** at the old paths
+(`/reset-password`, `/billing/success|cancel`) for backwards compatibility; new
+reset emails point straight at `app.tabmargin.com/reset-password` (set in
+`extension/api.js`). To fully retire the shims later: confirm no recovery emails
+or old extension installs still hit the API paths, then repoint `BILLING_RETURN_URL`
+at `https://app.tabmargin.com` and delete the GET routes.
 
 ### Theme System Implementation
 
